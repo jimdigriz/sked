@@ -1,0 +1,193 @@
+#!/usr/bin/perl
+
+=head1 NAME
+
+ical2rem - iCal to Remind Converter
+
+=cut
+
+use 5.010;
+
+use strict;
+use warnings;
+
+use filetest 'access';
+
+# /usr/include/sysexits.h
+# - would be nice to use sysexits.ph instead one day
+#BEGIN { require "sysexits.ph"; }
+use constant EX_OK		=> 0;	# successful termination
+use constant EX_USAGE		=> 64;	# command line usage error
+use constant EX_DATAERR		=> 65;	# data format error
+use constant EX_NOINPUT		=> 66;	# cannot open input
+use constant EX_NOUSER		=> 67;	# addressee unknown
+use constant EX_NOHOST		=> 68;	# host name unknown
+use constant EX_UNAVAILABLE	=> 69;	# service unavailable
+use constant EX_SOFTWARE	=> 70;	# internal software error
+use constant EX_OSERR		=> 71;	# system error (e.g., can't fork)
+use constant EX_OSFILE		=> 72;	# critical OS file missing
+use constant EX_CANTCREAT	=> 73;	# can't create (user) output file
+use constant EX_IOERR		=> 74;	# input/output error
+use constant EX_TEMPFAIL	=> 75;	# temp failure; user is invited to retry
+use constant EX_PROTOCOL	=> 76;	# remote error in protocol
+use constant EX_NOPERM		=> 77;	# permission denied
+use constant EX_CONFIG		=> 78;	# configuration error
+
+use Getopt::Long;
+use Pod::Usage;
+use Data::ICal 0.16;
+
+use Data::Dumper;
+
+=head1 SYNOPSIS
+
+ical2rem [options]
+
+=head1 OPTIONS
+
+=cut
+
+=over
+
+=item B<--help, -h>
+
+Print a brief help message and exits.
+
+=item B<--man>
+
+Prints the manual page and exits.
+
+=item B<--debug, -d>
+
+Enable debugging.
+
+=item B<--input, -i>
+
+Input filename.
+
+=item B<--output, -o>
+
+Output directory.
+
+=item B<--prefix, -p>
+
+Summary prefix (default: '{m}').
+
+=back
+
+=head1 DESCRIPTION
+
+B<This program> is all teh awesomes.
+
+=head1 DEPENDENCIES
+
+=over
+
+=item Data::ICal 0.16 L<http://search.cpan.org/~tsibley/Data-ICal/>
+
+=back
+
+=cut
+
+my ($help, $man);
+my ($debug);
+my ($input, $output);
+my $prefix = '{m}';
+
+GetOptions(
+	'help|h'	=> \$help,
+	'man'		=> \$man,
+
+	'debug|d'	=> \$debug,
+
+	'input|i=s'	=> \$input,
+	'output|o=s'	=> \$output,
+
+	'prefix|p=s'	=> \$prefix,
+) or pod2usage(-exitstatus => EX_USAGE, -verbose => 2);
+
+pod2usage(-exitstatus => EX_OK, -verbose => 1)
+	if ($help);
+pod2usage(-exitstatus => EX_OK, -verbose => 2)
+	if ($man);
+
+unless (defined($input)) {
+	print STDERR "'input' file is required\n";
+	exit EX_USAGE;
+}
+unless (defined($output) && -d "$output" 
+		&& -r "$output" && -w "$output" && -x "$output") {
+	print STDERR "'output' directory does not exist or it not accessible\n";
+	exit EX_USAGE;
+}
+$prefix .= ' ';
+
+my $cal;
+if ($input eq '-') {
+	my $data;
+	$data .= $_
+		while (<STDIN>);
+	close STDIN;
+
+	$cal = Data::ICal->new(data => $data);
+} else {
+	$cal = Data::ICal->new(filename => $input);
+}
+unless ($cal) {
+	print STDERR $cal->error_message;
+	exit EX_DATAERR;
+}
+
+my @tz = grep { ref($_) eq 'Data::ICal::Entry::TimeZone' } @{$cal->entries};
+unless (scalar @tz == 1) {
+	print STDERR "there has to be just a single TimeZone entry\n";
+	exit EX_DATAERR;
+}
+
+my @events = grep { ref($_) eq 'Data::ICal::Entry::Event' } @{$cal->entries};
+unless (scalar @events > 0) {
+	print STDERR "there has to be at least one Event entry\n";
+	exit EX_DATAERR;
+}
+
+foreach my $event (@events) {
+	my $prop_summ = $event->property('summary');
+	my $prop_desc = $event->property('description');
+
+	my $summ = $prefix . $prop_summ->[0]->value;
+	my $desc = $prop_desc->[0]->value;
+	  $desc =~ s/^.*?(?:\*~){9}\*//ms;
+	  $desc =~ s/\n\n[^\n]+ @ Telemetry\n.*$//ms; # WTF?!
+	  $desc =~ s/\n/%_\\\n/sg;
+
+	print <<EOF;
+REM 18 Nov MSF %"$summ%" $desc
+EOF
+
+	exit 0;
+}
+
+exit EX_OK;
+
+=head1 AUTHOR
+
+Alexander Clouter E<lt>L<alex@digriz.org.uk>E<gt>
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (C) 2012  Alexander Clouter E<lt>L<alex@digriz.org.uk>E<gt>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but B<without any warranty>; without even the implied warranty of
+B<merchantability> or B<fitness for a particular purpose>.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see L<http://www.gnu.org/licenses/>.
+
+=cut
