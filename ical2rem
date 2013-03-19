@@ -158,7 +158,7 @@ foreach my $event (@events) {
 	my $desc = $prop_desc->[0]->value;
 	  $desc =~ s/^.*?(?:\*~){9}\*//ms;
 	  $desc =~ s/\n\n[^\n]+ @ Telemetry\n.*$//ms; # WTF?!
-	  $desc =~ s/\n/%_\\\n/sg;
+	  $desc =~ s/\n+/\n%_\\\n/msg;
 
 	print <<EOF;
 REM 18 Nov MSF %"$summ%" $desc
