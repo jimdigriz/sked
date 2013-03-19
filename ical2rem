@@ -164,7 +164,7 @@ foreach my $event (@events) {
 REM 18 Nov MSF %"$summ%" $desc
 EOF
 
-	exit 0;
+	exit EX_OK;
 }
 
 exit EX_OK;
