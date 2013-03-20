@@ -11,6 +11,7 @@ use 5.010;
 use strict;
 use warnings;
 
+use feature 'switch';
 use filetest 'access';
 
 # /usr/include/sysexits.h
@@ -36,6 +37,7 @@ use constant EX_CONFIG		=> 78;	# configuration error
 use Getopt::Long;
 use Pod::Usage;
 use Data::ICal 0.16;
+use Date::ICal 1.72;
 
 use Data::Dumper;
 
@@ -138,33 +140,90 @@ unless ($cal) {
 	exit EX_DATAERR;
 }
 
-my @tz = grep { ref($_) eq 'Data::ICal::Entry::TimeZone' } @{$cal->entries};
-unless (scalar @tz == 1) {
-	print STDERR "there has to be just a single TimeZone entry\n";
-	exit EX_DATAERR;
+my %globals = (
+	prodid	=> $cal->property('prodid')->[0]->value,
+	method	=> $cal->property('method')->[0]->value,
+);
+
+print Dumper \%globals;
+
+my @events;
+foreach my $entry (@{$cal->entries}) {
+	given(ref $entry) {
+		when ('Data::ICal::Entry::Event') {
+			push @events, event($entry);
+		}
+		default {
+			DEBUG("ignoring unknown entry type $_");
+		}
+	}
 }
 
-my @events = grep { ref($_) eq 'Data::ICal::Entry::Event' } @{$cal->entries};
+# cannot do anything if there are no actual (parsable) events
 unless (scalar @events > 0) {
 	print STDERR "there has to be at least one Event entry\n";
 	exit EX_DATAERR;
 }
 
-foreach my $event (@events) {
-	my $prop_summ = $event->property('summary');
-	my $prop_desc = $event->property('description');
+print Dumper \@events;
 
-	my $summ = $prefix . $prop_summ->[0]->value;
-	my $desc = $prop_desc->[0]->value;
-	  $desc =~ s/^.*?(?:\*~){9}\*//ms;
-	  $desc =~ s/\n\n[^\n]+ @ Telemetry\n.*$//ms; # WTF?!
-	  $desc =~ s/\n+/\n%_\\\n/msg;
+#foreach my $event (@events) {
+#	$summ = $prefix . $summary;
+#	$desc =~ s/\n\n[^\n]+ @ Telemetry\n.*$//ms; # WTF?!
+#	$desc =~ s/\n+/\n%_\\\n/msg;
+#
+#	print <<EOF;
+#REM 18 Nov MSF %"$summ%" $desc
+#EOF
+#}
 
-	print <<EOF;
-REM 18 Nov MSF %"$summ%" $desc
-EOF
+exit EX_OK;
 
-	exit EX_OK;
+sub DEBUG {
+	my $msg = shift;
+
+	print STDERR "DEBUG: $msg\n"
+		if (defined($debug));
+}
+
+sub event {
+	my $entry = shift;
+
+	my $event = $entry->properties;
+	unless (defined($event->{uid})) {
+		print STDERR "missing UID, bailing\n";
+		exit EX_DATAERR;
+	}
+
+	foreach (keys %$event) {
+		when(/uid|summary|description/) {
+			$event->{$_} = $event->{$_}->[0]->value;
+			continue;
+		}
+		when(/dt(?:start|end)/) {
+			$event->{$_} = Date::ICal->new(ical => $event->{$_});
+		}
+		when(/organizer/) {
+			$event->{$_} = $event->{$_}->[0];
+		}
+	}
+
+	given($globals{'prodid'}) {
+		when ('Microsoft Exchange Server 2010') {
+			$event = fixup_event_msexchange($event)
+		}
+	}
+
+	return $event;
+}
+
+sub fixup_event_msexchange {
+	my $entry = shift;
+
+	# remove big pointless prepended drivel
+	$entry->{description} =~ s/^.*?(?:\*~){9}\*[^[:print:]]*//ims;
+
+	return $entry;
 }
 
 exit EX_OK;
