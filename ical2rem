@@ -140,12 +140,10 @@ unless ($cal) {
 	exit EX_DATAERR;
 }
 
-my %globals = (
+our %globals = (
 	prodid	=> $cal->property('prodid')->[0]->value,
 	method	=> $cal->property('method')->[0]->value,
 );
-
-print Dumper \%globals;
 
 my @events;
 foreach my $entry (@{$cal->entries}) {
