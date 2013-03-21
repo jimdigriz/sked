@@ -198,6 +198,7 @@ sub event {
 	foreach (keys %$event) {
 		when(/uid|summary|description/) {
 			$event->{$_} = $event->{$_}->[0]->value;
+			# for dt(start|end) we want to do further tweaks
 			continue;
 		}
 		when(/dt(?:start|end)/) {
