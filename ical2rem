@@ -145,6 +145,12 @@ our %globals = (
 	method	=> $cal->property('method')->[0]->value,
 );
 
+# HACK
+our @sigblocks = (
+	"\n-- \n.*\$",
+	"\n\n[^\n]+ @ Telemetry\n.*\$",
+);
+
 my @events;
 foreach my $entry (@{$cal->entries}) {
 	given(ref $entry) {
@@ -165,15 +171,15 @@ unless (scalar @events > 0) {
 
 print Dumper \@events;
 
-#foreach my $event (@events) {
-#	$summ = $prefix . $summary;
-#	$desc =~ s/\n\n[^\n]+ @ Telemetry\n.*$//ms; # WTF?!
-#	$desc =~ s/\n+/\n%_\\\n/msg;
-#
-#	print <<EOF;
-#REM 18 Nov MSF %"$summ%" $desc
-#EOF
-#}
+foreach my $event (@events) {
+	my $summ = $prefix . $event->{summary};
+	my $desc = $event->{description};
+	  $desc =~ s/\n/\n%_\\\n/msg;
+
+	print <<EOF;
+REM 18 Nov MSF %"$summ%" $desc
+EOF
+}
 
 exit EX_OK;
 
@@ -193,13 +199,25 @@ sub event {
 		exit EX_DATAERR;
 	}
 
+	# note we occasionally use 'continue' for further fixups
 	foreach (keys %$event) {
-		when(/uid|summary|description/) {
+		when(/uid|summary|description|dtstart|dtend/) {
 			$event->{$_} = $event->{$_}->[0]->value;
-			# for dt(start|end) we want to do further tweaks
 			continue;
 		}
-		when(/dt(?:start|end)/) {
+		when(/description/) {
+			$event->{description} =~ s/$_//ms
+				foreach (@sigblocks);
+			continue;
+		}
+		when(/summary|description/) {
+			# prune whitespace
+			$event->{$_} =~ s/^\s*//s;
+			$event->{$_} =~ s/\s*$//s;
+			# flatten newlines
+			$event->{$_} =~ s/\n+/\n/g;
+		}
+		when(/dtstart|dtend/) {
 			$event->{$_} = Date::ICal->new(ical => $event->{$_});
 		}
 		when(/organizer/) {
