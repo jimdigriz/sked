@@ -209,6 +209,17 @@ sub event {
 		}
 	}
 
+	foreach my $subentry (@{$entry->entries}) {
+		given(ref $subentry) {
+			when ('Data::ICal::Entry::Alarm::Display') {
+				$event->{alarm} = $subentry;
+			}
+			default {
+				DEBUG("ignoring unknown subentry type $_");
+			}
+		}
+	}
+
 	given($globals{'prodid'}) {
 		when ('Microsoft Exchange Server 2010') {
 			$event = fixup_event_msexchange($event)
