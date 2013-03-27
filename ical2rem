@@ -170,7 +170,7 @@ unless (scalar @events > 0) {
 	exit EX_DATAERR;
 }
 
-print Dumper \@events;
+print STDERR Dumper \@events;
 
 foreach my $event (@events) {
 	unless (defined($event->{summary})
@@ -193,7 +193,7 @@ foreach my $event (@events) {
 				? $event->{description} : '';
 	  $description =~ s/\n/\n%_\\\n/msg;
 
-	my $duration	= '';
+	my $duration = '';
 	if ($dur->as_seconds) {
 		my $dhours	= (defined($dur->hours)) ? $dur->hours : 0;
 		my $dmins	= (defined($dur->minutes)) ? $dur->minutes : 0;
@@ -203,7 +203,7 @@ foreach my $event (@events) {
 
 	my $output = ($description eq '')
 		? "REM $day $month $year AT $hour:$min$duration MSG $summary"
-		: "REM $day $month $year AT $hour:$min$duration MSF %\"$summary%\" $description";
+		: "REM $day $month $year AT $hour:$min$duration MSF %\"$summary%\"%_\\$description";
 
 	print "$output\n";
 }
