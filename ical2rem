@@ -201,9 +201,11 @@ foreach my $event (@events) {
 		$duration	= " DURATION $dhours:" . sprintf('%0.2d', $dmins)
 	}
 
-	print <<EOF;
-REM $day $month $year AT $hour:$min$duration MSF %"$summary%" $description
-EOF
+	my $output = ($description eq '')
+		? "REM $day $month $year AT $hour:$min$duration MSG $summary"
+		: "REM $day $month $year AT $hour:$min$duration MSF %\"$summary%\" $description";
+
+	print "$output\n";
 }
 
 exit EX_OK;
