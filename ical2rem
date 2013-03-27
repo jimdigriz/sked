@@ -38,6 +38,7 @@ use Getopt::Long;
 use Pod::Usage;
 use Data::ICal 0.16;
 use Date::ICal 1.72;
+use POSIX;
 
 use Data::Dumper;
 
@@ -172,12 +173,36 @@ unless (scalar @events > 0) {
 print Dumper \@events;
 
 foreach my $event (@events) {
-	my $summ = $prefix . $event->{summary};
-	my $desc = $event->{description};
-	  $desc =~ s/\n/\n%_\\\n/msg;
+	unless (defined($event->{summary})
+			&& defined($event->{dtstart})
+			&& defined($event->{dtend}) ) {
+		print STDERR "missing fields\n";
+		exit EX_DATAERR;
+	}
+
+	my $year	= $event->{dtstart}->year;
+	my $month	= POSIX::strftime '%b',
+				gmtime($event->{dtstart}->epoch);
+	my $day		= $event->{dtstart}->day;
+	my $hour	= sprintf '%0.2d', $event->{dtstart}->hour;
+	my $min		= sprintf '%0.2d', $event->{dtstart}->min;
+	my $dur		= $event->{dtend} - $event->{dtstart};
+
+	my $summary	= $prefix . $event->{summary};
+	my $description	= (defined($event->{description}))
+				? $event->{description} : '';
+	  $description =~ s/\n/\n%_\\\n/msg;
+
+	my $duration	= '';
+	if ($dur->as_seconds) {
+		my $dhours	= (defined($dur->hours)) ? $dur->hours : 0;
+		my $dmins	= (defined($dur->minutes)) ? $dur->minutes : 0;
+
+		$duration	= " DURATION $dhours:" . sprintf('%0.2d', $dmins)
+	}
 
 	print <<EOF;
-REM 18 Nov MSF %"$summ%" $desc
+REM $day $month $year AT $hour:$min$duration MSF %"$summary%" $description
 EOF
 }
 
