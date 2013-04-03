@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-ical2rem - iCal to Remind Converter
+sked - iCal to Remind Converter
 
 =cut
 
@@ -44,7 +44,7 @@ use Data::Dumper;
 
 =head1 SYNOPSIS
 
-ical2rem [options]
+sked [options]
 
 =head1 OPTIONS
 
