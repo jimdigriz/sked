@@ -191,7 +191,7 @@ foreach my $event (@events) {
 	my $summary	= $prefix . $event->{summary};
 	my $description	= (defined($event->{description}))
 				? $event->{description} : '';
-	  $description =~ s/\n/\n%_\\\n/msg;
+	  $description =~ s/\n/%_\\\n/g;
 
 	my $duration = '';
 	if ($dur->as_seconds) {
@@ -203,7 +203,7 @@ foreach my $event (@events) {
 
 	my $output = ($description eq '')
 		? "REM $day $month $year AT $hour:$min$duration MSG $summary"
-		: "REM $day $month $year AT $hour:$min$duration MSF %\"$summary%\"%_\\$description";
+		: "REM $day $month $year AT $hour:$min$duration MSF %\"$summary%\"%_\\\n$description";
 
 	print "$output\n";
 }
