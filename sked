@@ -193,6 +193,22 @@ foreach my $event (@events) {
 				? $event->{description} : '';
 	  $description =~ s/\n/%_\\\n/g;
 
+	my $alarm = '';
+	if (defined($event->{alarm})) {
+		my $aevent = $event->{alarm}->properties;
+		unless (defined($aevent->{trigger})
+				&& defined($aevent->{action}) ) {
+			print STDERR "missing fields\n";
+			exit EX_DATAERR;
+		}
+
+		if (uc $aevent->{action}->[0]->value eq 'DISPLAY') {
+			my $d = Date::ICal::Duration->new(
+					ical => $aevent->{trigger}->[0]->value);
+			$alarm = ' +' . $d->minutes;
+		}
+	}
+
 	my $duration = '';
 	if ($dur->as_seconds) {
 		my $dhours	= (defined($dur->hours)) ? $dur->hours : 0;
@@ -201,9 +217,10 @@ foreach my $event (@events) {
 		$duration	= " DURATION $dhours:" . sprintf('%0.2d', $dmins)
 	}
 
-	my $output = ($description eq '')
-		? "REM $day $month $year AT $hour:$min$duration MSG $summary"
-		: "REM $day $month $year AT $hour:$min$duration MSF %\"$summary%\"%_\\\n$description";
+	my $output = "REM $day $month $year AT $hour:$min$alarm$duration ";
+	$output .= ($description eq '')
+		? "MSG $summary"
+		: "MSF %\"$summary%\"%_\\\n$description";
 
 	print "$output\n";
 }
