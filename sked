@@ -253,6 +253,8 @@ sub event {
 			continue;
 		}
 		when(/summary|description/) {
+			# prune non-ASCII
+			$event->{$_} =~ s/[^[:print:]\n]//g;
 			# prune whitespace
 			$event->{$_} =~ s/^\s*//s;
 			$event->{$_} =~ s/\s*$//s;
