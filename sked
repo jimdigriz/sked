@@ -270,7 +270,7 @@ sub event {
 	}
 
 	# some people lead the description with the summary
-	$event->{description} =~ s/^\Q$event->{summary}\E\n//sm
+	$event->{description} =~ s/^\Q$event->{summary}\E\n//ms
 		if (defined($event->{summary}) && defined($event->{description}));
 
 	foreach my $subentry (@{$entry->entries}) {
