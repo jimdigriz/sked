@@ -202,11 +202,9 @@ foreach my $event (@events) {
 			exit EX_DATAERR;
 		}
 
-		if (uc $aevent->{action}->[0]->value eq 'DISPLAY') {
-			my $d = Date::ICal::Duration->new(
-					ical => $aevent->{trigger}->[0]->value);
-			$alarm = ' +' . $d->minutes;
-		}
+		my $d = Date::ICal::Duration->new(
+				ical => $aevent->{trigger}->[0]->value);
+		$alarm = ' +' . $d->minutes;
 	}
 
 	my $duration = '';
