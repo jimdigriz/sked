@@ -297,7 +297,7 @@ sub fixup_event_msexchange {
 	my $entry = shift;
 
 	# remove big pointless prepended drivel
-	$entry->{description} =~ s/^.*?(?:\*~){9}\*[^[:print:]]*//ims;
+	$entry->{description} =~ s/^.*?(?:\*~){9}\*[^[:print:]]*//s;
 
 	return $entry;
 }
