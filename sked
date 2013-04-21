@@ -290,6 +290,9 @@ sub event {
 		}
 	}
 
+	delete $event->{description}
+		if ($event->{description} eq '');
+
 	return $event;
 }
 
