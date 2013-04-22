@@ -38,6 +38,9 @@ use Getopt::Long;
 use Pod::Usage;
 use Data::ICal 0.16;
 use Date::ICal 1.72;
+use DateTime 0.61;
+use DateTime::Event::ICal 0.10;
+use DateTime::Format::ICal 0.09;
 use POSIX;
 
 use Data::Dumper;
@@ -152,11 +155,19 @@ our @sigblocks = (
 	"\n\n[^\n]+ @ Telemetry\n.*\$",
 );
 
+DateTime->DefaultLocale(POSIX::setlocale(LC_CTYPE));
+
 my @events;
+my %tzids;
 foreach my $entry (@{$cal->entries}) {
 	given(ref $entry) {
 		when ('Data::ICal::Entry::Event') {
 			push @events, event($entry);
+		}
+		when ('Data::ICal::Entry::TimeZone') {
+			my ($name, $tzid) = tzid($entry);
+			$tzids{$name} = $tzid
+				if (scalar @$tzid);
 		}
 		default {
 			DEBUG("ignoring unknown entry type $_");
@@ -171,6 +182,7 @@ unless (scalar @events > 0) {
 }
 
 print STDERR Dumper \@events;
+print STDERR Dumper \%tzids;
 
 foreach my $event (@events) {
 	unless (defined($event->{summary})
@@ -180,20 +192,13 @@ foreach my $event (@events) {
 		exit EX_DATAERR;
 	}
 
-	my $year	= $event->{dtstart}->year;
-	my $month	= POSIX::strftime '%b',
-				gmtime($event->{dtstart}->epoch);
-	my $day		= $event->{dtstart}->day;
-	my $hour	= sprintf '%0.2d', $event->{dtstart}->hour;
-	my $min		= sprintf '%0.2d', $event->{dtstart}->min;
-	my $dur		= $event->{dtend} - $event->{dtstart};
+	my $dt = DateTime::Format::ICal->parse_datetime(
+			$event->{dtstart}->ical
+	);
+	#$dt->set_time_zone('local');
 
-	my $summary	= $prefix . $event->{summary};
-	my $description	= (defined($event->{description}))
-				? $event->{description} : '';
-	  $description =~ s/\n/%_\\\n/g;
+	my $output = $dt->strftime('REM %e %b %Y AT %H:%M');
 
-	my $alarm = '';
 	if (defined($event->{alarm})) {
 		my $aevent = $event->{alarm}->properties;
 		unless (defined($aevent->{trigger})
@@ -204,21 +209,26 @@ foreach my $event (@events) {
 
 		my $d = Date::ICal::Duration->new(
 				ical => $aevent->{trigger}->[0]->value);
-		$alarm = ' +' . $d->minutes;
+		$output .= ' +' . $d->minutes;
 	}
 
-	my $duration = '';
-	if ($dur->as_seconds) {
+	if (defined($event->{dtend})) {
+		my $dur		= $event->{dtend} - $event->{dtstart};
 		my $dhours	= (defined($dur->hours)) ? $dur->hours : 0;
 		my $dmins	= (defined($dur->minutes)) ? $dur->minutes : 0;
 
-		$duration	= " DURATION $dhours:" . sprintf('%0.2d', $dmins)
+		$output .= " DURATION $dhours:" . sprintf('%0.2d', $dmins);
 	}
 
-	my $output = "REM $day $month $year AT $hour:$min$alarm$duration ";
-	$output .= ($description eq '')
-		? "MSG $summary"
-		: "MSF %\"$summary%\"%_\\\n$description";
+	my $summary = $prefix . $event->{summary};
+	if (defined($event->{description})) {
+		my $description	= $event->{description};
+		  $description =~ s/\n/%_\\\n/g;
+
+		$output .= " MSF %\"$summary%\"%_\\\n$description";
+	} else {
+		$output .= " MSG $summary"
+	}
 
 	print "$output\n";
 }
@@ -294,6 +304,51 @@ sub event {
 		if ($event->{description} eq '');
 
 	return $event;
+}
+
+sub tzid {
+	my $entry = shift;
+
+	unless ($entry->property('tzid')) {
+		print STDERR "missing TZID, bailing\n";
+		exit EX_DATAERR;
+	}
+	my $name = $entry->property('tzid')->[0]->value;
+
+	my @tzid;
+	foreach my $subentry (@{$entry->entries}) {
+		my $props = $subentry->properties;
+		unless (defined($props->{dtstart})
+				&& defined($props->{rrule})
+				&& defined($props->{tzoffsetfrom})
+				&& defined($props->{tzoffsetto})) {
+			DEBUG("missing needed TIMEZONE properties, skipping\n");
+			next;
+		}
+
+		# DTSTART:16010101T020000
+		my $dtstart = DateTime::Format::ICal->parse_datetime(
+				$props->{dtstart}->[0]->value
+		);
+		# FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=10
+		my %rule = map { split /=/ }
+				split /;/, $props->{rrule}->[0]->value;
+		my $set = DateTime::Event::ICal->recur(
+			dtstart		=> $dtstart,
+			freq		=> lc $rule{FREQ},
+			interval	=> $rule{INTERVAL},
+			bymonth		=> $rule{BYMONTH},
+			byday		=> lc $rule{BYDAY},
+		);
+
+		push @tzid, {
+			from	=> $props->{tzoffsetfrom}->[0]->value,
+			to	=> $props->{tzoffsetto}->[0]->value,
+			set	=> $set,
+		}
+	}
+
+	return ($name, \@tzid);
 }
 
 sub fixup_event_msexchange {
