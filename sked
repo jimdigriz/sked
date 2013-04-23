@@ -159,7 +159,15 @@ DateTime->DefaultLocale(POSIX::setlocale(LC_CTYPE));
 
 my @events;
 my %tzids;
-foreach my $entry (@{$cal->entries}) {
+foreach my $entry (sort { # make sure Data::ICal::Entry::TimeZone is first
+			return  0
+				if (ref($a) eq ref($b));
+			return -1
+				if (ref($a) eq 'Data::ICal::Entry::TimeZone');
+			return  1
+				if (ref($b) eq 'Data::ICal::Entry::TimeZone');
+			return  0;
+		} @{$cal->entries}) {
 	given(ref $entry) {
 		when ('Data::ICal::Entry::Event') {
 			push @events, event($entry);
