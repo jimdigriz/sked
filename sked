@@ -193,19 +193,19 @@ print STDERR Dumper \@events;
 print STDERR Dumper \%tzids;
 
 foreach my $event (@events) {
-	unless (defined($event->{summary})
-			&& defined($event->{dtstart})
-			&& defined($event->{dtend}) ) {
+	unless (defined($event->{_summary})
+			&& defined($event->{_dtstart})
+			&& defined($event->{_dtend}) ) {
 		print STDERR "missing fields\n";
 		exit EX_DATAERR;
 	}
 
-	my $dt = DateTime::Format::ICal->parse_datetime(
-			$event->{dtstart}->ical
+	my $dtstart = DateTime::Format::ICal->parse_datetime(
+			$event->{_dtstart}->ical
 	);
-	#$dt->set_time_zone('local');
+	#$dtstart->set_time_zone('local');
 
-	my $output = $dt->strftime('REM %e %b %Y AT %H:%M');
+	my $output = $dtstart->strftime('REM %e %b %Y AT %H:%M');
 
 	if (defined($event->{alarm})) {
 		my $aevent = $event->{alarm}->properties;
@@ -220,17 +220,22 @@ foreach my $event (@events) {
 		$output .= ' +' . $d->minutes;
 	}
 
-	if (defined($event->{dtend})) {
-		my $dur		= $event->{dtend} - $event->{dtstart};
+	if (defined($event->{_dtend})) {
+		my $dtend = DateTime::Format::ICal->parse_datetime(
+				$event->{_dtend}->ical
+		);
+		#$dtend->set_time_zone('local');
+
+		my $dur		= $dtend - $dtstart;
 		my $dhours	= (defined($dur->hours)) ? $dur->hours : 0;
 		my $dmins	= (defined($dur->minutes)) ? $dur->minutes : 0;
 
 		$output .= " DURATION $dhours:" . sprintf('%0.2d', $dmins);
 	}
 
-	my $summary = $prefix . $event->{summary};
-	if (defined($event->{description})) {
-		my $description	= $event->{description};
+	my $summary = $prefix . $event->{_summary};
+	if (defined($event->{_description})) {
+		my $description	= $event->{_description};
 		  $description =~ s/\n/%_\\\n/g;
 
 		$output .= " MSF %\"$summary%\"%_\\\n$description";
@@ -262,34 +267,34 @@ sub event {
 	# note we occasionally use 'continue' for further fixups
 	foreach (keys %$event) {
 		when(/uid|summary|description|dtstart|dtend/) {
-			$event->{$_} = $event->{$_}->[0]->value;
+			$event->{"_$_"} = $event->{$_}->[0]->value;
 			continue;
 		}
 		when(/description/) {
-			$event->{description} =~ s/$_//ms
+			$event->{_description} =~ s/$_//ms
 				foreach (@sigblocks);
 			continue;
 		}
 		when(/summary|description/) {
 			# prune non-ASCII
-			$event->{$_} =~ s/[^[:print:]\n]//g;
+			$event->{"_$_"} =~ s/[^[:print:]\n]//g;
 			# prune whitespace
-			$event->{$_} =~ s/^\s*//s;
-			$event->{$_} =~ s/\s*$//s;
+			$event->{"_$_"} =~ s/^\s*//s;
+			$event->{"_$_"} =~ s/\s*$//s;
 			# flatten newlines
-			$event->{$_} =~ s/\n+/\n/g;
+			$event->{"_$_"} =~ s/\n+/\n/g;
 		}
 		when(/dtstart|dtend/) {
-			$event->{$_} = Date::ICal->new(ical => $event->{$_});
+			$event->{"_$_"} = Date::ICal->new(ical => $event->{"_$_"});
 		}
 		when(/organizer/) {
-			$event->{$_} = $event->{$_}->[0];
+			$event->{"_$_"} = $event->{$_}->[0];
 		}
 	}
 
 	# some people lead the description with the summary
-	$event->{description} =~ s/^\Q$event->{summary}\E\n//ms
-		if (defined($event->{summary}) && defined($event->{description}));
+	$event->{_description} =~ s/^\Q$event->{_summary}\E\n//ms
+		if (defined($event->{_summary}) && defined($event->{_description}));
 
 	foreach my $subentry (@{$entry->entries}) {
 		given(ref $subentry) {
@@ -308,8 +313,8 @@ sub event {
 		}
 	}
 
-	delete $event->{description}
-		if ($event->{description} eq '');
+	delete $event->{_description}
+		if ($event->{_description} eq '');
 
 	return $event;
 }
@@ -363,7 +368,7 @@ sub fixup_event_msexchange {
 	my $entry = shift;
 
 	# remove big pointless prepended drivel
-	$entry->{description} =~ s/^.*?(?:\*~){9}\*[^[:print:]]*//s;
+	$entry->{_description} =~ s/^.*?(?:\*~){9}\*[^[:print:]]*//s;
 
 	return $entry;
 }
